@@ -1,82 +1,144 @@
-// RumahKu Budget — charts drawn as inline SVG, no library and no network.
-// Both builders return an SVG string; the caller drops it into the page.
+// RumahKu Budget — charts drawn on canvas, no library.
+//
+// Two charts, both drawn with plain canvas 2D so the site needs no
+// framework and no network: a donut of where the money went, and grouped
+// bars of income, spending and saving across six months.
 
-// A donut of spending by category, with a legend and the total in the middle.
-export function donutChart(categories, total, size = 220) {
-  const radius = 80;
-  const inner = 52;
-  const cx = size / 2;
-  const cy = size / 2;
+import { formatRupiah, formatShort } from "./format.js";
+
+function setupCanvas(canvas, height) {
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || canvas.parentElement.clientWidth || 320;
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  canvas.style.height = height + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return { ctx, width, height };
+}
+
+export function drawDonut(canvas, categories, spentTotal) {
+  const { ctx, width, height } = setupCanvas(canvas, 260);
+  const centreX = width * 0.32;
+  const centreY = height / 2;
+  const outer = Math.min(width * 0.3, 105);
+  const inner = outer * 0.62;
+  const total = spentTotal || 1;
   let angle = -Math.PI / 2;
-  const slices = [];
-  const legend = [];
-  for (const c of categories) {
-    const share = total > 0 ? c.actual / total : 0;
-    const sweep = share * Math.PI * 2;
-    const large = sweep > Math.PI ? 1 : 0;
-    const x1 = cx + radius * Math.cos(angle);
-    const y1 = cy + radius * Math.sin(angle);
-    const x2 = cx + radius * Math.cos(angle + sweep);
-    const y2 = cy + radius * Math.sin(angle + sweep);
-    if (share > 0) {
-      slices.push(
-        `<path d="M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${c.color}"/>`,
-      );
-    }
-    angle += sweep;
-    legend.push(
-      `<li><span class="dot" style="background:${c.color}"></span>${c.name} — ${((share * 100) || 0).toFixed(1).replace('.', ',')}%</li>`,
-    );
+
+  ctx.clearRect(0, 0, width, height);
+  for (const category of categories) {
+    const slice = (category.spent / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(centreX, centreY);
+    ctx.arc(centreX, centreY, outer, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = category.color;
+    ctx.fill();
+    angle += slice;
   }
-  const innerCircle = `<circle cx="${cx}" cy="${cy}" r="${inner}" fill="#ffffff"/>`;
-  return `<div class="donut-wrap"><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Spending by category donut chart">${slices.join('')}${innerCircle}<text x="${cx}" y="${cy - 6}" text-anchor="middle" class="donut-total">${(total / 1000000).toFixed(2).replace('.', ',')}</text><text x="${cx}" y="${cy + 16}" text-anchor="middle" class="donut-label">juta spent</text></svg><ul class="legend">${legend.join('')}</ul></div>`;
+  ctx.beginPath();
+  ctx.arc(centreX, centreY, inner, 0, Math.PI * 2);
+  ctx.fillStyle = "#fffdf6";
+  ctx.fill();
+
+  ctx.fillStyle = "#22312b";
+  ctx.font = "700 22px Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(formatShort(spentTotal).replace("Rp ", ""), centreX, centreY - 10);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillText("juta spent", centreX, centreY + 14);
+
+  // Legend, drawn to the right of the ring.
+  const legendX = width * 0.62;
+  let legendY = 34;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (const category of categories) {
+    const share = (category.spent / total) * 100;
+    ctx.fillStyle = category.color;
+    ctx.beginPath();
+    ctx.arc(legendX + 6, legendY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#22312b";
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillText(category.label + " — " + share.toFixed(1).replace(".", ",") + "%", legendX + 18, legendY);
+    legendY += 26;
+  }
 }
 
-// Grouped bars: income vs spending vs saving for each of the last 6 months.
-export function monthBars(months) {
-  const width = 640;
-  const height = 260;
-  const padLeft = 64;
+export function drawMonthBars(canvas, months) {
+  const { ctx, width, height } = setupCanvas(canvas, 240);
+  const padLeft = 46;
   const padBottom = 30;
-  const padTop = 14;
-  const max = Math.max(...months.map((m) => m.income)) * 1.08;
-  const plotW = width - padLeft - 16;
-  const plotH = height - padTop - padBottom;
-  const groupW = plotW / months.length;
-  const barW = Math.min(22, (groupW - 18) / 3);
-  const y = (v) => padTop + plotH - (v / max) * plotH;
-  const grid = [0, 5000000, 10000000, 15000000, 20000000]
-    .map(
-      (v) =>
-        `<line x1="${padLeft}" y1="${y(v)}" x2="${width - 16}" y2="${y(v)}" class="grid"/><text x="${padLeft - 8}" y="${y(v) + 4}" text-anchor="end" class="axis">${(v / 1000000).toFixed(0)} jt</text>`,
-    )
-    .join('');
-  const bars = months
-    .map((m, i) => {
-      const gx = padLeft + i * groupW + (groupW - barW * 3 - 8) / 2;
-      const trio = [
-        ['#2f6f5e', m.income, 'Income'],
-        ['#c98a2e', m.spent, 'Spent'],
-        ['#3a6ea5', m.saved, 'Saved'],
-      ];
-      return trio
-        .map(([color, value], k) => {
-          const bx = gx + k * (barW + 4);
-          return `<rect x="${bx.toFixed(1)}" y="${y(value).toFixed(1)}" width="${barW}" height="${(padTop + plotH - y(value)).toFixed(1)}" fill="${color}"><title>${m.month}: ${value.toLocaleString('id-ID')} — ${['Income', 'Spent', 'Saved'][k]}</title></rect>`;
-        })
-        .join('') +
-        `<text x="${(padLeft + i * groupW + groupW / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" class="axis">${m.month}</text>`;
-    })
-    .join('');
-  const key =
-    `<g class="key"><rect x="${padLeft}" y="0" width="12" height="12" fill="#2f6f5e"/><text x="${padLeft + 16}" y="10">Income</text>` +
-    `<rect x="${padLeft + 96}" y="0" width="12" height="12" fill="#c98a2e"/><text x="${padLeft + 112}" y="10">Spent</text>` +
-    `<rect x="${padLeft + 184}" y="0" width="12" height="12" fill="#3a6ea5"/><text x="${padLeft + 200}" y="10">Saved</text></g>`;
-  return `<svg viewBox="0 0 ${width} ${height}" class="bars" role="img" aria-label="Income, spending and saving for the last six months">${key}${grid}${bars}</svg>`;
+  const padTop = 16;
+  const plotWidth = width - padLeft - 12;
+  const plotHeight = height - padTop - padBottom;
+  const maxValue = Math.max(...months.map((month) => month.income)) * 1.08;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.fillStyle = "#6b7280";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let step = 0; step <= 4; step++) {
+    const value = (maxValue / 4) * step;
+    const y = padTop + plotHeight - (value / maxValue) * plotHeight;
+    ctx.strokeStyle = "#e7dfc9";
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(width - 12, y);
+    ctx.stroke();
+    ctx.fillText((value / 1000000).toFixed(0) + " jt", padLeft - 6, y);
+  }
+
+  const groupWidth = plotWidth / months.length;
+  const barWidth = Math.min(16, groupWidth / 4.5);
+  const series = [
+    { key: "income", color: "#2e6b57", label: "Income" },
+    { key: "spent", color: "#c08a1e", label: "Spent" },
+    { key: "saved", color: "#2f5d8a", label: "Saved" },
+  ];
+
+  months.forEach((month, index) => {
+    const groupX = padLeft + index * groupWidth + groupWidth / 2;
+    series.forEach((item, seriesIndex) => {
+      const value = item.key === "saved" ? month.income - month.spent : month[item.key];
+      const barHeight = (value / maxValue) * plotHeight;
+      const x = groupX - (series.length * barWidth) / 2 + seriesIndex * barWidth;
+      ctx.fillStyle = item.color;
+      ctx.fillRect(x, padTop + plotHeight - barHeight, barWidth - 2, barHeight);
+    });
+    ctx.fillStyle = "#22312b";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(month.label, groupX, height - 22);
+  });
+
+  // Legend above the plot.
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  let legendX = padLeft;
+  for (const item of series) {
+    ctx.fillStyle = item.color;
+    ctx.fillRect(legendX, 4, 10, 10);
+    ctx.fillStyle = "#22312b";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(item.label, legendX + 15, 9);
+    legendX += 15 + ctx.measureText(item.label).width + 22;
+  }
 }
 
-// A thin progress bar (0–100%) used for budgets and savings goals.
-export function progressBar(fraction, color = '#2f6f5e') {
-  const clamped = Math.max(0, Math.min(1, fraction));
-  return `<div class="bar" role="img" aria-label="${Math.round(clamped * 100)} percent"><div class="bar-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${color}"></div></div>`;
+export function moneyLeftCaption(income, spent, plannedSaving) {
+  const left = income - spent;
+  const rate = income > 0 ? (left / income) * 100 : 0;
+  return {
+    left,
+    rate,
+    text: formatRupiah(left) + " left · " + rate.toFixed(1).replace(".", ",") + "% of income",
+    planText: "Plan: save " + formatRupiah(plannedSaving),
+  };
 }

@@ -1,53 +1,96 @@
-// RumahKu Budget — expenses view: the full transaction list with a category
-// filter and a remove button on every row. Totals follow the filter.
+// RumahKu Budget — expenses view.
+//
+// The month's spending, one row per purchase, filterable by category.
+// Add a purchase with the form and the category totals move at once;
+// remove one and the money comes back.
 
-import { rp, sumTransactions } from './format.js';
+import { categoryById } from "./data.js";
+import { escapeHtml, formatDate, formatRupiah, parseAmount } from "./format.js";
+import { addExpense, removeExpense, state } from "./state.js";
 
-export function expensesView(state, filter = 'all') {
-  const rows = state.transactions
-    .filter((t) => filter === 'all' || t.category === filter)
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  const total = sumTransactions(rows);
-  const catName = (id) => state.categories.find((c) => c.id === id)?.name ?? id;
-  const options = ['all', ...state.categories.map((c) => c.id)]
-    .map(
-      (id) =>
-        `<option value="${id}"${id === filter ? ' selected' : ''}>${id === 'all' ? 'All categories' : catName(id)}</option>`,
-    )
-    .join('');
+export function renderExpenses(filter = "all") {
+  const categories = state.categories;
+  const shown = filter === "all"
+    ? state.expenses
+    : state.expenses.filter((expense) => expense.category === filter);
+  const shownTotal = shown.reduce((sum, expense) => sum + expense.amount, 0);
+  const allTotal = state.expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   return `
-<section class="page-head">
-  <h1>Expenses — ${state.month}</h1>
-  <p class="lede">Every rupiah this household spent in November 2026: ${state.transactions.length} transactions totalling ${rp(sumTransactions(state.transactions))}. Filter by category, or remove a mistaken entry — the totals and the budget update with it.</p>
-</section>
+  <section class="page-head">
+    <h1>Expenses — November 2026</h1>
+    <p class="lede">Every purchase this month, newest first. ${state.expenses.length} expenses recorded,
+    totalling ${formatRupiah(allTotal)}. Add one below and the category totals move at once.</p>
+  </section>
 
-<section class="panel">
-  <p class="actions"><label>Show <select id="expense-filter">${options}</select></label>
-  <span class="filter-total">Showing ${rows.length} of ${state.transactions.length} · total <strong>${rp(total)}</strong></span></p>
-  <table class="tx">
-    <thead><tr><th>Date</th><th>What</th><th>Category</th><th class="num">Amount</th><th></th></tr></thead>
-    <tbody>
-      ${rows
-        .map(
-          (t) => `<tr><td>${t.date}</td><td>${t.note}</td><td>${catName(t.category)}</td><td class="num">${rp(t.amount)}</td><td><button class="link-btn" type="button" data-remove="${t.id}">Remove</button></td></tr>`,
-        )
-        .join('')}
-    </tbody>
-    <tfoot><tr><td colspan="3"><strong>Total shown</strong></td><td class="num"><strong>${rp(total)}</strong></td><td></td></tr></tfoot>
-  </table>
-  <p><a href="#/budget">Add a new expense in the budget planner →</a></p>
-</section>
+  <section class="card">
+    <div class="filter-row" role="group" aria-label="Filter expenses by category">
+      <a class="chip ${filter === "all" ? "chip-active" : ""}" href="#/expenses">All (${state.expenses.length})</a>
+      ${categories.map((category) => {
+        const count = state.expenses.filter((expense) => expense.category === category.id).length;
+        return `<a class="chip ${filter === category.id ? "chip-active" : ""}" href="#/expenses/${category.id}">${category.label} (${count})</a>`;
+      }).join("")}
+    </div>
+    <p class="muted">Showing ${shown.length} expense${shown.length === 1 ? "" : "s"} · ${formatRupiah(shownTotal)}</p>
+    <table class="expense-table">
+      <thead><tr><th>Date</th><th>What</th><th>Category</th><th>Amount</th><th></th></tr></thead>
+      <tbody>
+        ${shown.map((expense) => {
+          const category = categoryById(expense.category);
+          return `
+        <tr>
+          <td>${formatDate(expense.date)}</td>
+          <td>${escapeHtml(expense.note)}</td>
+          <td><span class="dot" style="background:${category ? category.color : "#999"}"></span> ${category ? category.label : expense.category}</td>
+          <td>${formatRupiah(expense.amount)}</td>
+          <td><button class="link-btn" type="button" data-remove="${expense.id}">Remove</button></td>
+        </tr>`;
+        }).join("") || `<tr><td colspan="5">No expenses in this category yet — add the first one below.</td></tr>`}
+      </tbody>
+    </table>
+  </section>
 
-<section class="panel">
-  <h2>Biggest single spends</h2>
-  <ol class="bullets">
-    ${[...state.transactions]
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5)
-      .map((t) => `<li>${t.note} — <strong>${rp(t.amount)}</strong> (${t.date}, ${catName(t.category)})</li>`)
-      .join('')}
-  </ol>
-  <p class="muted">Rent is the biggest single line every month (Rp 4.500.000). After that, school fees (Rp 1.400.000) and the weekly shops lead the list.</p>
-</section>`;
+  <section class="card">
+    <h2>Add an expense</h2>
+    <form id="expense-form" class="inline-form">
+      <label>Date <input type="date" name="date" value="2026-11-26" required></label>
+      <label>Category
+        <select name="category">
+          ${categories.map((category) => `<option value="${category.id}">${category.label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="wide">What was it? <input type="text" name="note" maxlength="80" placeholder="e.g. Weekly market shop" required></label>
+      <label>Amount (Rp) <input type="number" name="amount" min="1000" step="1000" placeholder="250000" required></label>
+      <button class="btn btn-primary" type="submit">Add expense</button>
+      <span class="form-note" id="expense-note" role="status"></span>
+    </form>
+  </section>`;
+}
+
+export function mountExpenses() {
+  const form = document.getElementById("expense-form");
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const note = String(data.get("note") || "").trim();
+      const amount = parseAmount(String(data.get("amount") || "0"));
+      const status = document.getElementById("expense-note");
+      if (!note || amount <= 0) {
+        if (status) status.textContent = "Write what it was and an amount above Rp 0.";
+        return;
+      }
+      addExpense({
+        date: String(data.get("date") || "2026-11-26"),
+        category: String(data.get("category") || "groceries"),
+        note,
+        amount,
+      });
+      if (status) status.textContent = "Added — " + formatRupiah(amount) + " for “" + note + "”.";
+      form.reset();
+    });
+  }
+  document.querySelectorAll("[data-remove]").forEach((button) => {
+    button.addEventListener("click", () => removeExpense(button.getAttribute("data-remove")));
+  });
 }

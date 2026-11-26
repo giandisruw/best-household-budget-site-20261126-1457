@@ -1,103 +1,129 @@
-// RumahKu Budget — dashboard view: the month at a glance.
-// Shows the summary cards, the spending donut, the 6-month bars, overspend
-// alerts, savings goals and the newest transactions. All figures come from state.
+// RumahKu Budget — dashboard view.
+//
+// The front page: the month at a glance. Income, spending, saving and the
+// biggest category up top, then the donut of where the money went, the
+// six-month bars, the three categories closest to their limit and the
+// newest expenses.
 
-import { pct, rp, sumActual, sumIncome, sumPlanned } from './format.js';
-import { donutChart, monthBars, progressBar } from './charts.js';
+import { HOUSEHOLD, MONTHS } from "./data.js";
+import { formatPercent, formatRupiah } from "./format.js";
+import { drawDonut, drawMonthBars } from "./charts.js";
+import { incomeTotal, plannedTotal, savedTotal, spentTotal, state } from "./state.js";
 
-function overspendAlerts(state) {
-  const over = state.categories.filter((c) => c.actual > c.planned);
-  if (over.length === 0) {
-    return '<p class="ok">Every category is within its plan this month. Nice work.</p>';
-  }
-  return (
-    '<ul class="alerts">' +
-    over
-      .map(
-        (c) =>
-          `<li><strong>${c.name}</strong> is ${rp(c.actual - c.planned)} over plan ` +
-          `(${rp(c.actual)} spent of ${rp(c.planned)} planned).</li>`,
-      )
-      .join('') +
-    '</ul>'
-  );
+function biggestCategory() {
+  return state.categories.reduce((biggest, category) =>
+    category.spent > biggest.spent ? category : biggest, state.categories[0]);
 }
 
-export function dashboardView(state) {
-  const income = sumIncome(state.income);
-  const planned = sumPlanned(state.categories);
-  const spent = sumActual(state.categories);
-  const saved = income - spent;
-  const plannedSaved = income - planned;
-  const newest = [...state.transactions]
-    .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 6);
-  const catName = (id) => state.categories.find((c) => c.id === id)?.name ?? id;
-  const biggest = [...state.categories].sort((a, b) => b.actual - a.actual)[0];
+function overPlanList() {
+  return state.categories
+    .map((category) => ({
+      ...category,
+      used: category.planned > 0 ? (category.spent / category.planned) * 100 : 0,
+    }))
+    .sort((a, b) => b.used - a.used)
+    .slice(0, 3);
+}
+
+export function renderDashboard() {
+  const income = incomeTotal();
+  const spent = spentTotal();
+  const saved = savedTotal();
+  const planned = plannedTotal();
+  const plannedSaving = income - planned;
+  const savingRate = income > 0 ? (saved / income) * 100 : 0;
+  const biggest = biggestCategory();
+  const biggestShare = spent > 0 ? (biggest.spent / spent) * 100 : 0;
+  const over = overPlanList();
+  const recent = state.expenses.slice(0, 5);
 
   return `
-<section class="hero">
-  <div>
-    <p class="eyebrow">${state.month} · ${state.place} · 2 adults + 2 children</p>
-    <h1>Your household budget, in one place.</h1>
-    <p class="lede">Income, spending, saving and goals for the Wijaya family — every figure below is this month's real plan and real spending, and every tool on this site works on it.</p>
-    <p class="hero-links"><a class="btn" href="#/budget">Plan this month</a> <a class="btn ghost" href="#/calculator">Try the calculator</a></p>
-  </div>
-  <div class="hero-card">
-    <p class="card-label">Money left to save</p>
-    <p class="big">${rp(saved)}</p>
-    <p class="muted">${pct(saved, income)} of income · plan was ${rp(plannedSaved)}</p>
-    ${progressBar(saved / income, '#2f6f5e')}
-    <p class="muted small">Plan: save ${rp(plannedSaved)} (${pct(plannedSaved, income)})</p>
-  </div>
-</section>
+  <section class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">${HOUSEHOLD.month.toUpperCase()} · ${HOUSEHOLD.place.toUpperCase()} · ${HOUSEHOLD.members.toUpperCase()}</p>
+      <h1>Your household budget, in one place.</h1>
+      <p class="lede">Income, spending, saving and goals for the ${HOUSEHOLD.name} — every figure below is
+      this month's real plan and real spending, and every tool on this site works on it.</p>
+      <p class="hero-actions">
+        <a class="btn btn-primary" href="#/budget">Plan this month</a>
+        <a class="btn btn-ghost" href="#/calculator">Try the calculator</a>
+      </p>
+    </div>
+    <div class="card save-card">
+      <p class="card-label">Money left to save</p>
+      <p class="big-number">${formatRupiah(saved)}</p>
+      <p class="muted">${formatPercent(savingRate)} of income · plan was ${formatRupiah(plannedSaving)}</p>
+      <div class="meter"><span style="width:${Math.min(100, Math.max(0, savingRate * 5))}%"></span></div>
+      <p class="muted small">Plan: save ${formatRupiah(plannedSaving)} (${formatPercent(plannedSaving / income * 100)})</p>
+    </div>
+  </section>
 
-<section class="cards" aria-label="Month summary">
-  <article class="card"><p class="card-label">Income</p><p class="figure">${rp(income)}</p><p class="muted">${state.income.map((i) => `${i.source}: ${rp(i.amount)}`).join(' · ')}</p></article>
-  <article class="card"><p class="card-label">Spent so far</p><p class="figure">${rp(spent)}</p><p class="muted">Plan ${rp(planned)} · ${rp(spent - planned)} over plan</p></article>
-  <article class="card"><p class="card-label">Saved so far</p><p class="figure">${rp(saved)}</p><p class="muted">${pct(saved, income)} savings rate · target 20%</p></article>
-  <article class="card"><p class="card-label">Biggest category</p><p class="figure">${biggest.name.split(' ')[0]}</p><p class="muted">${rp(biggest.actual)} · ${pct(biggest.actual, spent)} of spending</p></article>
-</section>
+  <section class="stat-grid">
+    <div class="card stat">
+      <p class="card-label">Income</p>
+      <p class="stat-value">${formatRupiah(income)}</p>
+      <p class="muted small">${state.income.map((source) => source.label + ": " + formatRupiah(source.amount)).join(" · ")}</p>
+    </div>
+    <div class="card stat">
+      <p class="card-label">Spent so far</p>
+      <p class="stat-value">${formatRupiah(spent)}</p>
+      <p class="muted small">Plan ${formatRupiah(planned)} · ${formatRupiah(spent - planned)} ${spent >= planned ? "over plan" : "under plan"}</p>
+    </div>
+    <div class="card stat">
+      <p class="card-label">Saved so far</p>
+      <p class="stat-value">${formatRupiah(saved)}</p>
+      <p class="muted small">${formatPercent(savingRate)} savings rate · target 20%</p>
+    </div>
+    <div class="card stat">
+      <p class="card-label">Biggest category</p>
+      <p class="stat-value">${biggest.label.split(" &")[0]}</p>
+      <p class="muted small">${formatRupiah(biggest.spent)} · ${formatPercent(biggestShare)} of spending</p>
+    </div>
+  </section>
 
-<section class="split">
-  <article class="panel">
-    <h2>Where the money went</h2>
-    ${donutChart(state.categories, spent)}
-  </article>
-  <article class="panel">
-    <h2>Six months: income, spending, saving</h2>
-    ${monthBars(state.months)}
-    <p class="muted">Saving climbed from Rp 2,9 jt in June to Rp 3,6 jt in October. November dips to Rp 3,27 jt because groceries and fun ran over plan.</p>
-  </article>
-</section>
+  <section class="two-col">
+    <div class="card">
+      <h2>Where the money went</h2>
+      <canvas id="donut-chart" aria-label="Donut chart of spending by category" role="img"></canvas>
+      <p class="muted small">Groceries ran over plan by ${formatRupiah(320000)} — see the budget page to fix it.</p>
+    </div>
+    <div class="card">
+      <h2>Six months: income, spending, saving</h2>
+      <canvas id="month-bars" aria-label="Bar chart of income, spending and saving for six months" role="img"></canvas>
+      <p class="muted small">Saving has held above Rp 3.000.000 for three months running.</p>
+    </div>
+  </section>
 
-<section class="split">
-  <article class="panel">
-    <h2>Over plan this month</h2>
-    ${overspendAlerts(state)}
-    <p><a href="#/budget">Open the budget planner →</a></p>
-  </article>
-  <article class="panel">
-    <h2>Savings goals</h2>
-    ${state.goals
-      .slice(0, 2)
-      .map(
-        (g) =>
-          `<p class="goal-line"><strong>${g.name}</strong> — ${rp(g.saved)} of ${rp(g.target)} (${pct(g.saved, g.target)})</p>${progressBar(g.saved / g.target)}`,
-      )
-      .join('')}
-    <p><a href="#/goals">All savings goals →</a></p>
-  </article>
-</section>
+  <section class="two-col">
+    <div class="card">
+      <h2>Closest to the limit</h2>
+      <ul class="plain-list">
+        ${over.map((category) => `
+        <li>
+          <span class="dot" style="background:${category.color}"></span>
+          <span class="list-main">${category.label}</span>
+          <span class="list-right ${category.used > 100 ? "over" : ""}">${formatPercent(category.used)} used</span>
+        </li>`).join("")}
+      </ul>
+      <p><a href="#/budget">Open the budget planner →</a></p>
+    </div>
+    <div class="card">
+      <h2>Newest expenses</h2>
+      <ul class="plain-list">
+        ${recent.map((expense) => `
+        <li>
+          <span class="list-main">${expense.note}</span>
+          <span class="list-right">${formatRupiah(expense.amount)}</span>
+        </li>`).join("")}
+      </ul>
+      <p><a href="#/expenses">See all expenses →</a></p>
+    </div>
+  </section>`;
+}
 
-<section class="panel">
-  <h2>Latest spending</h2>
-  <table class="tx">
-    <thead><tr><th>Date</th><th>What</th><th>Category</th><th class="num">Amount</th></tr></thead>
-    <tbody>
-      ${newest.map((t) => `<tr><td>${t.date}</td><td>${t.note}</td><td>${catName(t.category)}</td><td class="num">${rp(t.amount)}</td></tr>`).join('')}
-    </tbody>
-  </table>
-  <p><a href="#/expenses">All ${state.transactions.length} transactions →</a></p>
-</section>`;
+export function mountDashboard() {
+  const donut = document.getElementById("donut-chart");
+  if (donut) drawDonut(donut, state.categories, spentTotal());
+  const bars = document.getElementById("month-bars");
+  if (bars) drawMonthBars(bars, MONTHS);
 }

@@ -1,60 +1,123 @@
-// RumahKu Budget — calculator view: the 50/30/20 split and a goal timeline.
-// Both tools recompute live as the household types.
+// RumahKu Budget — calculator view.
+//
+// Two tools that run entirely in the browser:
+// 1. The 50 / 30 / 20 split — needs, wants and savings for any income.
+// 2. The goal clock — how many months a monthly contribution needs to
+//    reach a target. Both update live as the numbers change.
 
-import { rp, splitIncome } from './format.js';
+import { formatPercent, formatRupiah, parseAmount } from "./format.js";
+import { incomeTotal } from "./state.js";
 
-export const RULES = [
-  { id: '50-30-20', label: '50 / 30 / 20 — balanced', rule: [50, 30, 20] },
-  { id: '60-20-20', label: '60 / 20 / 20 — needs-heavy', rule: [60, 20, 20] },
-  { id: '70-20-10', label: '70 / 20 / 10 — tight month', rule: [70, 20, 10] },
-];
+function splitRows(income) {
+  return [
+    { label: "Needs — rent, food, bills, transport, school", share: 0.5, color: "#2e6b57" },
+    { label: "Wants — eating out, cinema, fun", share: 0.3, color: "#c08a1e" },
+    { label: "Savings & extra debt payments", share: 0.2, color: "#2f5d8a" },
+  ].map((row) => ({ ...row, amount: income * row.share }));
+}
 
-export function calculatorView(state) {
-  const defaultIncome = 21500000;
-  const split = splitIncome(defaultIncome, RULES[0].rule);
-  const ruleOptions = RULES.map(
-    (r) => `<option value="${r.id}">${r.label}</option>`,
-  ).join('');
+export function renderCalculator() {
+  const income = incomeTotal();
+  const rows = splitRows(income);
 
   return `
-<section class="page-head">
-  <h1>Budget calculator</h1>
-  <p class="lede">Two quick tools. First, split any monthly income into needs, wants and saving. Second, see how long a savings goal takes at a monthly amount. Both work entirely in your browser — nothing leaves this page.</p>
-</section>
+  <section class="page-head">
+    <h1>Budget calculator</h1>
+    <p class="lede">Two quick tools. First, the 50 / 30 / 20 split for this household's income;
+    change the income and the split follows. Second, how long a monthly contribution takes to reach a goal.</p>
+  </section>
 
-<section class="split">
-  <article class="panel">
-    <h2>Split your income</h2>
-    <form id="split-form">
-      <label>Monthly income (Rp) <input type="number" id="split-income" min="0" step="100000" value="${defaultIncome}"></label>
-      <label>Rule <select id="split-rule">${ruleOptions}</select></label>
-    </form>
-    <div id="split-result" class="calc-result" aria-live="polite">
-      <p><span class="dot" style="background:#2f6f5e"></span>Needs (50%) — <strong>${rp(split.needs)}</strong></p>
-      <p><span class="dot" style="background:#c98a2e"></span>Wants (30%) — <strong>${rp(split.wants)}</strong></p>
-      <p><span class="dot" style="background:#3a6ea5"></span>Saving (20%) — <strong>${rp(split.savings)}</strong></p>
+  <section class="two-col">
+    <div class="card">
+      <h2>The 50 / 30 / 20 split</h2>
+      <label class="field-label">Monthly household income (Rp)
+        <input id="calc-income" type="number" min="0" step="100000" value="${income}">
+      </label>
+      <div id="split-output">
+        ${rows.map((row) => `
+        <div class="split-row">
+          <span class="dot" style="background:${row.color}"></span>
+          <span class="list-main">${row.label}</span>
+          <span class="list-right"><strong>${formatRupiah(row.amount)}</strong> · ${formatPercent(row.share * 100, 0)}</span>
+        </div>`).join("")}
+      </div>
+      <div class="meter meter-tall"><span style="width:50%;background:#2e6b57"></span></div>
+      <p class="muted small">This household actually spends about 83% on needs, 6% on wants and saves 15% —
+      housing and food are heavy, so 50 / 30 / 20 is a direction here, not a pass mark. Try 60 / 25 / 15 if 50% needs is out of reach.</p>
     </div>
-    <p class="muted small">Needs are rent, food, transport, utilities, school and insurance. Wants are eating out, cinema and fun. This household's real split this month is about 70% needs, 6% wants, 15% saving — saving is below the 20% target because groceries and fun ran over.</p>
-  </article>
-  <article class="panel">
-    <h2>How long to reach a goal?</h2>
-    <form id="goal-form">
-      <label>Goal amount (Rp) <input type="number" id="goal-target" min="0" step="100000" value="12000000"></label>
-      <label>Already saved (Rp) <input type="number" id="goal-saved" min="0" step="100000" value="7800000"></label>
-      <label>Saving per month (Rp) <input type="number" id="goal-monthly" min="0" step="50000" value="1000000"></label>
-    </form>
-    <p id="goal-result" class="calc-result" aria-live="polite">At Rp 1.000.000 a month, the Bali holiday (Rp 4.200.000 left) takes <strong>5 months</strong>.</p>
-    <p class="muted small">Tip: saving this month's whole Rp 3.270.000 would finish it in 2 months — but the emergency fund comes first.</p>
-  </article>
-</section>
 
-<section class="panel">
-  <h2>What the numbers mean</h2>
-  <ul class="bullets">
-    <li><strong>50/30/20</strong> suits a household whose needs fit in half its income. On Rp 21.500.000 that is Rp 10.750.000 needs, Rp 6.450.000 wants, Rp 4.300.000 saving.</li>
-    <li><strong>60/20/20</strong> fits this household better today: needs are really about Rp 12.900.000, and it still saves Rp 4.300.000.</li>
-    <li><strong>70/20/10</strong> is a tight-month fallback — saving drops to Rp 2.150.000, so use it for one month only, never as the plan.</li>
-    <li>Your saving rate is the number that matters most: saving divided by income. This month it is 15,2%.</li>
-  </ul>
-</section>`;
+    <div class="card">
+      <h2>How long until the goal?</h2>
+      <label class="field-label">Goal amount (Rp)
+        <input id="calc-target" type="number" min="0" step="100000" value="9000000">
+      </label>
+      <label class="field-label">Already saved (Rp)
+        <input id="calc-saved" type="number" min="0" step="100000" value="4200000">
+      </label>
+      <label class="field-label">Monthly contribution (Rp)
+        <input id="calc-monthly" type="number" min="0" step="50000" value="500000">
+      </label>
+      <p id="calc-result" class="calc-result" role="status"></p>
+      <p class="muted small">Example above: the Bali holiday — Rp 9.000.000 target, Rp 4.200.000 saved,
+      Rp 500.000 a month. Change any number and the answer updates.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>What the numbers mean for this family</h2>
+    <ul class="tips-list">
+      <li><strong>Needs at 83% is not a failure.</strong> Rent alone is 23% of income; in Surabaya that is normal for a family of four. The lever is not rent — it is the three categories over plan.</li>
+      <li><strong>Fun is the easiest win.</strong> Rp 285.000 over plan this month, with nothing to show for it but two extra dinners. A weekly envelope keeps the fun and removes the creep.</li>
+      <li><strong>Every Rp 100.000 a month is Rp 1.200.000 a year.</strong> That is a quarter of the Bali holiday, from one small habit.</li>
+    </ul>
+  </section>`;
+}
+
+function updateSplit() {
+  const input = document.getElementById("calc-income");
+  const output = document.getElementById("split-output");
+  if (!input || !output) return;
+  const income = parseAmount(input.value);
+  const rows = splitRows(income);
+  output.innerHTML = rows.map((row) => `
+    <div class="split-row">
+      <span class="dot" style="background:${row.color}"></span>
+      <span class="list-main">${row.label}</span>
+      <span class="list-right"><strong>${formatRupiah(row.amount)}</strong> · ${formatPercent(row.share * 100, 0)}</span>
+    </div>`).join("");
+}
+
+function updateGoalClock() {
+  const target = parseAmount(document.getElementById("calc-target").value);
+  const saved = parseAmount(document.getElementById("calc-saved").value);
+  const monthly = parseAmount(document.getElementById("calc-monthly").value);
+  const result = document.getElementById("calc-result");
+  if (!result) return;
+  const remaining = target - saved;
+  if (remaining <= 0) {
+    result.textContent = "Already there — you have saved the full " + formatRupiah(target) + ".";
+    return;
+  }
+  if (monthly <= 0) {
+    result.textContent = "Set a monthly contribution above Rp 0 to see how long it takes.";
+    return;
+  }
+  const months = Math.ceil(remaining / monthly);
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const span = years > 0
+    ? years + " year" + (years === 1 ? "" : "s") + (rest > 0 ? " and " + rest + " months" : "")
+    : months + " month" + (months === 1 ? "" : "s");
+  result.textContent = formatRupiah(remaining) + " to go — at " + formatRupiah(monthly) +
+    " a month that is " + span + " (" + months + " payments).";
+}
+
+export function mountCalculator() {
+  const incomeInput = document.getElementById("calc-income");
+  if (incomeInput) incomeInput.addEventListener("input", updateSplit);
+  for (const id of ["calc-target", "calc-saved", "calc-monthly"]) {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener("input", updateGoalClock);
+  }
+  updateGoalClock();
 }

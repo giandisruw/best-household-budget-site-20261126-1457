@@ -1,65 +1,61 @@
-// RumahKu Budget — money formatting and month totals. Pure functions, no DOM.
+// RumahKu Budget — formatting helpers.
+//
+// One place for every number the site shows, so "Rp 3.270.000" looks the
+// same on the dashboard, in the budget table and in the expense list.
+// Indonesian number style: dots for thousands, comma for decimals.
 
-// Format an IDR amount the Indonesian way: Rp 21.500.000 (no decimals).
-export function rp(amount) {
-  const n = Math.round(Number(amount) || 0);
-  return 'Rp ' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export function formatRupiah(amount) {
+  const rounded = Math.round(amount);
+  const sign = rounded < 0 ? "-" : "";
+  const digits = String(Math.abs(rounded)).split("");
+  const grouped = [];
+  while (digits.length > 3) grouped.unshift(digits.splice(-3).join(""));
+  grouped.unshift(digits.join(""));
+  return sign + "Rp " + grouped.join(".");
 }
 
-// Short form for chart labels: Rp 18,2 jt.
-export function rpShort(amount) {
-  const n = Number(amount) || 0;
-  if (Math.abs(n) >= 1000000) {
-    const v = n / 1000000;
-    return 'Rp ' + (Number.isInteger(v) ? v : v.toFixed(1).replace('.', ',')) + ' jt';
-  }
-  if (Math.abs(n) >= 1000) return 'Rp ' + Math.round(n / 1000) + ' rb';
-  return rp(n);
+export function formatShort(amount) {
+  // "Rp 18,23 jt" — the compact form used inside the donut chart.
+  const millions = amount / 1000000;
+  const text = millions.toFixed(2).replace(".", ",");
+  return "Rp " + text + " jt";
 }
 
-// One decimal percent, e.g. 15.2%.
-export function pct(part, whole) {
-  if (!whole) return '0%';
-  return ((part / whole) * 100).toFixed(1).replace('.', ',') + '%';
+export function formatPercent(value, decimals = 1) {
+  return value.toFixed(decimals).replace(".", ",") + "%";
 }
 
-export function sumIncome(income) {
-  return income.reduce((t, row) => t + row.amount, 0);
+export function formatDate(isoDate) {
+  const parts = isoDate.split("-");
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+  ];
+  return day + " " + monthNames[month - 1] + " " + year;
 }
 
-export function sumPlanned(categories) {
-  return categories.reduce((t, c) => t + c.planned, 0);
+export function parseAmount(raw) {
+  // Accepts "1.250.000", "1250000" or "Rp 1.250.000" and returns a number.
+  if (typeof raw === "number") return raw;
+  const cleaned = String(raw).replace(/[^0-9-]/g, "");
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? value : 0;
 }
 
-export function sumActual(categories) {
-  return categories.reduce((t, c) => t + c.actual, 0);
+export function clamp(value, min, max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
 }
 
-export function sumTransactions(transactions) {
-  return transactions.reduce((t, row) => t + row.amount, 0);
-}
-
-// Recompute a category's actual spend from the transaction list.
-export function actualFor(transactions, categoryId) {
-  return transactions
-    .filter((row) => row.category === categoryId)
-    .reduce((t, row) => t + row.amount, 0);
-}
-
-// 50/30/20 style split of a monthly income. `rule` is [needs, wants, savings] in percent.
-export function splitIncome(income, rule) {
-  const [needs, wants, savings] = rule;
-  return {
-    needs: Math.round((income * needs) / 100),
-    wants: Math.round((income * wants) / 100),
-    savings: Math.round((income * savings) / 100),
-  };
-}
-
-// Months needed to reach a goal saving a fixed amount each month (Infinity = never).
-export function monthsToGoal(target, saved, monthly) {
-  const left = target - saved;
-  if (left <= 0) return 0;
-  if (!monthly || monthly <= 0) return Infinity;
-  return Math.ceil(left / monthly);
+export function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
