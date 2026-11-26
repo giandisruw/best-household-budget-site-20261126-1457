@@ -1,72 +1,72 @@
-// RumahKu Budget — the hand-in program (Node 22+, standard library only).
-// It copies the site (app/) and its screenshots (screenshots/) from this
-// repository into /output and writes /output/dossier.json with the vendored
-// make.fun library, exactly as the kit's starter does. Outside the grader,
-// MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-// The program writes the same bytes on every run: it copies files only,
-// never stamps a time or a random value into the output.
+// RumahKu Budget — entrypoint for make.fun.
+//
+// Copies app/ and screenshots/ from this repository into the output
+// directory and writes /output/dossier.json with buildDossier from
+// vendor/makefun-frontend.ts. Run outside the grader with:
+//   MAKEFUN_OUTPUT_DIR=out node main.ts
+//
+// The program is deterministic: files are copied in code-unit path order
+// and buildDossier writes canonical bytes, so the grader's two runs
+// always produce identical output.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-frontend.ts';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildDossier } from "./vendor/makefun-frontend.ts";
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoRoot = dirname(fileURLToPath(import.meta.url));
+const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || "/output");
+if (outDir === resolve(repoRoot)) {
+  throw new Error("main.ts: refusing to use the repository root as the output directory");
+}
 
-// The gate's screenshots rule, checked here before anything is copied:
-// 3 or 4 images, each a regular file of at most 256 KiB.
-const MAX_SHOT_BYTES = 262144;
+const CAPS = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  app_max_files: 993,
+  app_max_bytes: 16 * 1024 * 1024,
+  app_path_max_bytes: 1000,
+};
 
-// Returns the screenshot names after checking each one is a regular file
-// inside the size cap; throws loudly on the first problem instead of
-// handing in a partial entry.
-function requireShots(shotsDir: string): string[] {
-  if (!existsSync(shotsDir)) {
-    throw new Error(`refusing to build: ${shotsDir} is missing`);
-  }
-  const shots = readdirSync(shotsDir).filter((name) => !name.startsWith('.'));
-  if (shots.length < 3 || shots.length > 4) {
-    throw new Error(`refusing to build: expected 3 or 4 screenshots, found ${shots.length}`);
-  }
-  for (const name of shots) {
-    const shot = join(shotsDir, name);
-    const stats = statSync(shot);
-    if (!stats.isFile()) {
-      throw new Error(`refusing to build: screenshot ${name} is not a regular file`);
+// Copy one directory tree, files first in sorted order, so the output is
+// byte-identical on every run and on every machine.
+function copyTree(sourceDir, targetDir) {
+  mkdirSync(targetDir, { recursive: true });
+  let copied = 0;
+  const entries = readdirSync(sourceDir, { withFileTypes: true })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const entry of entries) {
+    const from = join(sourceDir, entry.name);
+    const to = join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      copied += copyTree(from, to);
+    } else if (entry.isFile()) {
+      copyFileSync(from, to);
+      copied++;
+    } else {
+      throw new Error("main.ts: " + from + " is not a plain file or directory");
     }
-    if (stats.size > MAX_SHOT_BYTES) {
-      throw new Error(`refusing to build: screenshot ${name} is ${stats.size} bytes, over the 256 KiB cap`);
-    }
   }
-  return shots;
+  return copied;
 }
 
-// Fail loudly instead of handing in a partial entry: the site and its
-// screenshots must both be present before anything is copied.
-const indexFile = join(here, 'app', 'index.html');
-if (!existsSync(indexFile)) {
-  throw new Error(`refusing to build: ${indexFile} is missing`);
-}
-const shotsDir = join(here, 'screenshots');
-const shots = requireShots(shotsDir);
-
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) {
-  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+function requireDir(path, label) {
+  if (!existsSync(path) || !statSync(path).isDirectory()) {
+    throw new Error("main.ts: " + label + " is missing from the repository: " + path);
+  }
 }
 
-// The gate's caps, from the kit: at most 4 screenshots of 256 KiB each, at
-// most 993 files / 16 MiB in app/, and the dossier text capped at 160 KiB.
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    app_max_files: 993,
-    app_max_bytes: 16777216,
-  }),
+requireDir(join(repoRoot, "app"), "app/");
+requireDir(join(repoRoot, "screenshots"), "screenshots/");
+
+rmSync(outDir, { recursive: true, force: true });
+mkdirSync(outDir, { recursive: true });
+const appFiles = copyTree(join(repoRoot, "app"), join(outDir, "app"));
+const shotFiles = copyTree(join(repoRoot, "screenshots"), join(outDir, "screenshots"));
+
+const dossier = buildDossier(outDir, CAPS);
+writeFileSync(join(outDir, "dossier.json"), dossier);
+console.log(
+  "RumahKu Budget: copied " + appFiles + " app files and " + shotFiles +
+  " screenshots, wrote " + outDir + "/dossier.json (" + dossier.length + " bytes)",
 );

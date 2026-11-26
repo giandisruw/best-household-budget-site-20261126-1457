@@ -1,100 +1,82 @@
-# RumahKu Budget — a household budget site that adds up
+# RumahKu Budget — Household Budget Site
 
-[![make.fun](https://make.fun/badge/competition/best-household-budget-site-20261126-1457)](https://make.fun/bounty/best-household-budget-site-20261126-1457)
-[![make.fun entry](https://make.fun/badge/entry/best-household-budget-site-20261126-1457)](https://make.fun/bounty/best-household-budget-site-20261126-1457)
-[![make.fun leaderboard](https://make.fun/badge/leaderboard/best-household-budget-site-20261126-1457)](https://make.fun/bounty/best-household-budget-site-20261126-1457/leaderboard)
+[![make.fun · best-household-budget-site-20261126-1457](https://make.fun/badge/best-household-budget-site-20261126-1457.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
+[![rank](https://make.fun/badge/best-household-budget-site-20261126-1457/giandisruw/best-household-budget-site-20261126-1457/rank.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
+[![reward](https://make.fun/badge/best-household-budget-site-20261126-1457/giandisruw/best-household-budget-site-20261126-1457/reward.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org/)
 
-**RumahKu Budget** is an original household budget site for the Wijaya family
-in Surabaya. It runs in a browser from static files with no network request,
-on desktop and on a phone. Every page is reached from the top navigation, every
-figure is a real figure from one consistent example month (November 2026), and
-every control works on that data.
+A working household budget site for the Wijaya family of Surabaya — income,
+spending, saving and goals for November 2026, with every figure real and
+every control working. It runs entirely from its own files: no network
+requests, no tracking, no account.
 
-## What it contains
+## What it does
 
-- **Dashboard** (`#/`) — the month at a glance: income Rp 21.500.000, spent
-  Rp 18.230.000, saved Rp 3.270.000 (15,2% savings rate), a donut of spending
-  by category, income-vs-spending-vs-saving bars for June–November, overspend
-  alerts, savings-goal progress and the latest spending.
-- **Budget planner** (`#/budget`) — planned vs actual for 8 categories, with
-  editable plan amounts and a working **Save plan** button, plus an
-  **Add an expense** form that raises the category's spent figure at once.
-- **Expenses** (`#/expenses`) — all 26 November transactions totalling
-  Rp 18.230.000, filterable by category, with a **Remove** button on every row;
-  totals follow the filter and the removal.
-- **Savings goals** (`#/goals`) — emergency fund Rp 21.400.000 of
-  Rp 30.000.000 (71%), Bali holiday 65%, new motorbike 30%, education fund
-  25%; add money to any goal, or create a new goal of your own.
-- **Calculator** (`#/calculator`) — split any monthly income by the 50/30/20,
-  60/20/20 or 70/20/10 rule, and a goal-timeline tool (goal amount, already
-  saved, monthly saving → months to finish). Both recompute as you type.
-- **Guides & tips** (`#/tips`) — six specific habits tied to this month's real
-  figures, plus a 20-minute monthly routine.
+- **Dashboard** — income Rp 21.500.000, spent Rp 18.230.000, saved Rp 3.270.000
+  at a glance, a donut of where the money went, six months of income /
+  spending / saving bars, the categories closest to their limit and the
+  newest expenses.
+- **Budget planner** — set a plan per category, save it, and the totals,
+  used bars and statuses update at once. Three categories are over plan
+  this month; the page says which and by how much.
+- **Expenses** — all 16 purchases of the month, filterable by category,
+  with an add form and a remove button. Adding an expense moves the
+  category totals immediately.
+- **Goals** — four savings goals (emergency fund, motorbike, Bali holiday,
+  education) with progress bars, finish dates and one-tap contributions,
+  plus a form to start a new goal.
+- **Calculator** — the 50 / 30 / 20 split for any income, and a goal clock
+  that says how many months a monthly contribution needs. Both update live.
+- **Tips** — eight practical money habits written for this household, each
+  with the real saving attached, filterable by topic and searchable.
 
-The figures add up: the 26 transactions sum to exactly the month's spending
-(Rp 18.230.000), income minus spending equals the saving (Rp 3.270.000), and
-every month in the 6-month chart balances the same way. Edits are kept in the
-browser's localStorage only — nothing is sent anywhere — and the footer link
-resets back to the example month.
-
-## Files
-
-- `app/index.html` — the single page; every route is a hash route.
-- `app/main.js` — router and control wiring.
-- `app/data.js` — the example household: income, categories, transactions,
-  months, goals, tips.
-- `app/state.js` — load/save, add/remove expense, plan edits, goal edits.
-- `app/format.js` — rupiah formatting and month totals.
-- `app/charts.js` — inline-SVG donut, month bars and progress bars.
-- `app/views-*.js` — one view per page: dashboard, budget, expenses, goals,
-  calculator, tips.
-- `app/style.css` — the whole design, one stylesheet, responsive to phones.
-- `main.ts` — the hand-in program: copies `app/` and `screenshots/` to
-  `/output` and writes `dossier.json` with the vendored make.fun library.
-  Before copying it checks the hand-in the same way the gate does: the site's
-  index page must exist and the screenshots must be 3 or 4 regular files
-  inside the 256 KiB cap, so a broken hand-in fails loudly here instead of
-  scoring 0.
-- `vendor/makefun-frontend.ts` — the kit's copy, unchanged.
-- `screenshots/` — 4 real renders of the site's own code (desktop dashboard,
-  budget planner, savings goals, phone dashboard).
-- `serve.ts` — a tiny static server for local testing (`node serve.ts`).
+Edits are saved in the browser's localStorage only — nothing leaves the
+device, and the site works fully offline.
 
 ## Run it
 
 ```sh
 node serve.ts
-# open http://localhost:8080
 ```
 
-## Hand it in
+Then open http://localhost:8080 in a browser (add `--port 8090` for another
+port). The layout is responsive: the navigation wraps and the cards stack
+on a phone.
+
+## Hand it in (make.fun)
 
 ```sh
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
-- Determinism: `main.ts` run twice produces byte-identical output — the
-  program only copies files and builds the dossier, so both grader runs agree
-  (`diff -r` clean; dossier sha256
-  `5728b701cd91037dfbbdc8c9372b77a6f8dc5943fcf5724ede8cc517759a8ac5`).
-- Screenshots are real renders of the site's own code, converted to JPEG
-  (each under 256 KiB, long side 1280, short side ≥ 360).
+`main.ts` copies `app/` and `screenshots/` into the output directory and
+writes `dossier.json` with `buildDossier` from `vendor/makefun-frontend.ts`.
 
-## Tested
+## Files
 
-- 59 Node checks pass: every figure adds up (income Rp 21.500.000, planned
-  Rp 17.800.000, spent Rp 18.230.000, saved Rp 3.270.000; the 26 transactions
-  sum to the spending; every month balances), plus add/remove expense, plan
-  edits, goal edits and the calculator maths.
-- 15 browser checks pass in headless Chrome: adding an expense moves the
-  spent total, saving a plan moves the planned total, the category filter and
-  Remove work, adding money and creating a goal work, both calculators
-  recompute live, the reset link restores the example month, and no resource
-  is fetched from outside localhost.
-- Screenshots checked visually: desktop dashboard, budget planner, savings
-  goals and the 390 px phone dashboard are clean, legible and unclipped.
+| File | Job |
+| --- | --- |
+| `app/index.html` | Page shell, navigation, footer |
+| `app/main.js` | Hash router and boot |
+| `app/data.js` | Sample household data (income, categories, expenses, goals, tips) |
+| `app/state.js` | Live state in localStorage, with save / edit helpers |
+| `app/format.js` | Rupiah, percent and date formatting |
+| `app/charts.js` | Canvas donut and six-month bar chart, no library |
+| `app/views-dashboard.js` | Dashboard page |
+| `app/views-budget.js` | Budget planner page |
+| `app/views-expenses.js` | Expenses page |
+| `app/views-goals.js` | Savings goals page |
+| `app/views-calculator.js` | Calculator page |
+| `app/views-tips.js` | Money tips page |
+| `app/style.css` | The whole design, responsive |
+| `main.ts` | Entrypoint: builds the make.fun output |
+| `serve.ts` | Local static server for development |
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-Built for the make.fun bounty "Make the best household budget site"
-(best-household-budget-site-20261126-1457). Referral code: `0txwmf1m`.
+Built for the make.fun bounty [best-household-budget-site-20261126-1457](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457). Use referral code `0txwmf1m` when you join make.fun.
