@@ -59,8 +59,10 @@ function requireDir(path, label) {
 requireDir(join(repoRoot, "app"), "app/");
 requireDir(join(repoRoot, "screenshots"), "screenshots/");
 
-rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
+for (const entry of readdirSync(outDir)) {
+  rmSync(join(outDir, entry), { recursive: true, force: true });
+}
 const appFiles = copyTree(join(repoRoot, "app"), join(outDir, "app"));
 const shotFiles = copyTree(join(repoRoot, "screenshots"), join(outDir, "screenshots"));
 
